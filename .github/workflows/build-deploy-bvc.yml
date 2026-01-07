@@ -1,0 +1,78 @@
+name: Build and deploy to bvc
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6.0.1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2.1.0
+        with:
+          bun-version: latest
+
+      - name: Install deps
+        run: bun install --frozen-lockfile
+
+      - name: Build for stable
+        if: ${{ github.ref_name == 'main' }}
+        run: bun run build
+        env:
+          VITE_BASE: /bvc/stable/
+
+      - name: Build for beta
+        if: ${{ github.ref_name == 'develop' }}
+        run: bun run build
+        env:
+          VITE_BASE: /bvc/beta/
+
+      - name: Prepare bvc repository
+        env:
+          BVC_REPO: github.com/${{ github.repository_owner }}/bvc.git
+          BVC_PAT: ${{ secrets.BVC_PAT }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          rm -rf bvc
+          git clone --single-branch --branch main "https://x-access-token:${BVC_PAT}@${BVC_REPO}" bvc
+          git -C bvc checkout main
+
+      - name: Copy built stable artifact to bvc
+        if: ${{ github.ref_name == 'main' }}
+        run: |
+          rm -rf bvc/stable
+          cp -r dist bvc/stable
+
+      - name: Copy built beta artifact to bvc
+        if: ${{ github.ref_name == 'develop' }}
+        run: |
+          rm -rf bvc/beta
+          cp -r dist bvc/beta
+
+      - name: Apply updates
+        env:
+          BVC_REPO: github.com/${{ github.repository_owner }}/bvc.git
+          BVC_PAT: ${{ secrets.BVC_PAT }}
+        run: |
+          cd bvc
+          git add --all
+          git commit -m "Deploy from ${{ github.ref_name }}@${{ github.sha }}" || echo "No changes to commit"
+          git push --force "https://x-access-token:${BVC_PAT}@${BVC_REPO}" main
+
+      - name: Done
+        run: echo "Deployed to bvc"
