@@ -12,9 +12,13 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     Chat: typeof import('./components/Chat.vue')['default']
+    ChatBubbleDisplay: typeof import('./components/chat-themes/chat-bubble/ChatBubbleDisplay.vue')['default']
+    ChatBubbleEditor: typeof import('./components/chat-themes/chat-bubble/ChatBubbleEditor.vue')['default']
+    ChatBubbleGlobalConfig: typeof import('./components/chat-themes/chat-bubble/ChatBubbleGlobalConfig.vue')['default']
     ChatEditor: typeof import('./components/ChatEditor.vue')['default']
     EmotePicker: typeof import('./components/EmotePicker.vue')['default']
     MainView: typeof import('./components/MainView.vue')['default']
+    ParagraphDisplay: typeof import('./components/ParagraphDisplay.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }

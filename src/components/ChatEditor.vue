@@ -46,51 +46,12 @@
         </v-overlay>
       </template>
     </v-textarea>
-    <v-row>
-      <v-col>
-        <div>
-          <p style="text-align: center">Username color</p>
-          <v-color-picker
-            v-model="chat.name_color"
-            class="mx-auto"
-            show-swatches
-            :swatches="[['#25885B'], ['#638CF8'], ['#FFFFFF']]"
-          />
-        </div>
-      </v-col>
-      <v-col>
-        <div>
-          <p style="text-align: center">Bubble color</p>
-          <v-color-picker
-            v-model="chat.bubble_color"
-            class="mx-auto"
-            show-swatches
-            :swatches="[['#2BEA28'], ['#2960FB'], ['#FFFFFF']]"
-          />
-        </div>
-      </v-col>
-    </v-row>
-    <v-row>
-      <v-col>
-        <v-btn block @click="emit('render')"> 渲染 </v-btn>
-      </v-col>
-      <v-col>
-        <v-btn block color="warning" @click="emit('cancel')">{{
-          props.creating ? "取消" : "删除"
-        }}</v-btn>
-      </v-col>
-      <v-col>
-        <v-btn block color="primary" @click="emit('finished')">完成</v-btn>
-      </v-col>
-    </v-row>
   </v-form>
 </template>
 <script setup lang="ts">
-import type { ChatConfig } from "./Chat.vue";
+import type { SharedChatConfigure } from "./chat-themes/interface";
 
-const chat = defineModel<ChatConfig>({ required: true });
-const emit = defineEmits<{ finished: []; cancel: []; render: [] }>();
-const props = defineProps<{ creating: boolean }>();
+const chat = defineModel<SharedChatConfigure>({ required: true });
 
 const content_input = useTemplateRef("content-input");
 

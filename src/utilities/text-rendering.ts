@@ -1,5 +1,6 @@
 import type { Configuring } from "@/components/MainView.vue";
 import { useEmotes } from "@/stores/emotes";
+import { type Coordinate, draw_line, type Shape } from "./rendering";
 
 type CharacterType =
   | "Space"
@@ -40,23 +41,6 @@ function classify_character(character: string): CharacterType {
   }
   return "Other";
 }
-type Coordinate = { x: number; y: number };
-type Shape = { width: number; above_baseline: number; below_baseline: number };
-function draw_line(
-  context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-  start: Coordinate,
-  end: Coordinate,
-  color = "#c64dbe",
-) {
-  const backup = context.strokeStyle;
-  context.strokeStyle = color;
-  context.beginPath();
-  context.moveTo(start.x, start.y);
-  context.lineTo(end.x, end.y);
-  context.stroke();
-  context.closePath();
-  context.strokeStyle = backup;
-}
 const get_next_color = (() => {
   let state = false;
   return () => {
@@ -79,7 +63,7 @@ abstract class Box {
   async render(
     context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
     baseline_start: Coordinate,
-    configuring: Configuring,
+    configuring: UsedConfigurations,
   ): Promise<void> {
     if (configuring.debug) {
       const color = get_next_color();
@@ -136,7 +120,7 @@ abstract class Box {
 
   abstract calculate_shape(
     context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-    configuring: Configuring,
+    configuring: UsedConfigurations,
   ): void;
 }
 
@@ -159,9 +143,8 @@ class CombinationBox extends Box {
   async render(
     context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
     baseline_start: Coordinate,
-    configuring: Configuring,
+    configuring: UsedConfigurations,
     total_width = 0,
-    no_space_adjustment = true,
   ) {
     const space_width =
       context.measureText("a a").width - context.measureText("aa").width;
@@ -172,7 +155,7 @@ class CombinationBox extends Box {
     }
 
     const extra_space =
-      this.#elements.length === 0 || no_space_adjustment
+      this.#elements.length === 1 || total_width === 0
         ? 0
         : (total_width - this.shape.width) / (this.#elements.length - 1);
 
@@ -201,7 +184,7 @@ class CombinationBox extends Box {
 
   calculate_shape(
     context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-    configuring: Configuring,
+    configuring: UsedConfigurations,
   ) {
     const space_width =
       context.measureText("a a").width - context.measureText("aa").width;
@@ -259,7 +242,7 @@ class StringBox extends Box {
   async render(
     context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
     baseline_start: Coordinate,
-    configuring: Configuring,
+    configuring: UsedConfigurations,
   ) {
     super.render(context, baseline_start, configuring);
     context.fillText(this.#content, baseline_start.x, baseline_start.y);
@@ -267,7 +250,7 @@ class StringBox extends Box {
 
   calculate_shape(
     context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-    _configuring: Configuring,
+    _configuring: UsedConfigurations,
   ) {
     const measure = context.measureText(this.#content);
     this.shape = {
@@ -297,14 +280,14 @@ class SpaceBox extends Box {
   async render(
     context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
     baseline_start: Coordinate,
-    configuring: Configuring,
+    configuring: UsedConfigurations,
   ) {
     super.render(context, baseline_start, configuring);
   }
 
   calculate_shape(
     context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-    _configuring: Configuring,
+    _configuring: UsedConfigurations,
   ) {
     if (this.#size.endsWith("px")) {
       this.shape = {
@@ -339,7 +322,7 @@ class EmoteBox extends Box {
   async render(
     context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
     baseline_start: Coordinate,
-    configuring: Configuring,
+    configuring: UsedConfigurations,
   ) {
     super.render(context, baseline_start, configuring);
     const image = useEmotes().find_emote(this.#id)!;
@@ -359,7 +342,7 @@ class EmoteBox extends Box {
 
   calculate_shape(
     context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-    configuring: Configuring,
+    configuring: UsedConfigurations,
   ) {
     const backup = context.textBaseline;
     context.textBaseline = "bottom";
@@ -496,7 +479,7 @@ function knuth_plass(
   boxes: Box[],
   max_width: number,
   context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-  configuring: Configuring,
+  configuring: UsedConfigurations,
 ): [CombinationBox[], number] {
   const best = Array.from<number>({ length: boxes.length + 1 }).fill(
     Number.POSITIVE_INFINITY,
@@ -539,36 +522,77 @@ function knuth_plass(
   return [lines, best[boxes.length]!];
 }
 
+// subset of global configuration
+//  this type includes all configurations used in text rendering procedure and is used to give an accurate
+//  list of used configurations
+type UsedConfigurations = {
+  debug: boolean;
+  chat_emote_size: number;
+  chat_font_size: number;
+};
+
+// render given paragraph with the specified configuration
+//  paragraph is parsed with magic blocks expanded into their actual content
+//  width specified the maximum width of each line of the paragraph may use
+//  canvas can be supplied to reuse one allocated previously and such reuse is highly encouraged since it
+//   reduces overhead and therefore the memory usage
+//
+//  This function simply arranges the paragraph to fit the satisfy the maximum width requirement by inserting
+//   line breaks at where the knuth-plass algorithm believe is optimal. Only content of the paragraph will be
+//   rendered, while background, borders and everything else will not be included. You can use this to arrange
+//   your content in case you need automatic line breaks.
+//  Returns the rendered image as a Blob representing a PNG file, and the canvas used to do the rendering. If
+//   a canvas is not specified in arguments, a new canvas is created and returning it allows later reuse. The
+//   canvas is resized to the minimal size that is able to contain the rendered paragraph. To be specific, the
+//   content boxes with touch all boundaries of the canvas. Note that most glyphs will not touch the box set
+//   by the font, space may still occur near boundaries.
+//
+// Be careful when using this function: this function is relative slow, especially when processing long
+//  paragraphs since the knuth-plass algorithm is a dynamic programming algorithm whose time complexity is
+//  O(N^2). It is recommended that you invoke this function only once to get your paragraph arranged and cache
+//  the result for later reuse.
 export async function render_text(
   paragraph: string,
   configuring: Configuring,
-  width: number,
+  max_width: number,
   canvas?: HTMLCanvasElement | OffscreenCanvas,
 ): Promise<{ image: Blob; canvas: HTMLCanvasElement | OffscreenCanvas }> {
+  // replace configuring with local type to limit accessability
+  const local_configurations: UsedConfigurations = configuring;
+
+  // prepare canvas
   const used_canvas = canvas ?? new OffscreenCanvas(0, 0);
-  used_canvas.width = width;
+  used_canvas.width = 1;
   used_canvas.height = 1; // we do not really know what the height should be for now
   const context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D =
     used_canvas.getContext("2d")! as any;
-  context.font = `${configuring.chat_font_size}px "HarmonyOS Sans SC"`;
+  context.font = `${local_configurations.chat_font_size}px "HarmonyOS Sans SC"`;
   const boxes = process_paragraph(paragraph);
-  const [lines, badness] = knuth_plass(boxes, width, context, configuring);
-  if (configuring.debug) {
+  const [lines, badness] = knuth_plass(
+    boxes,
+    max_width,
+    context,
+    local_configurations,
+  );
+  if (local_configurations.debug) {
     console.log(lines, badness);
   }
   let height = 0;
+  let width = 0;
   for (const line of lines) {
-    line.calculate_shape(context, configuring);
+    line.calculate_shape(context, local_configurations);
     height += line.shape.above_baseline + line.shape.below_baseline;
+    width = Math.max(width, line.shape.width);
   }
 
   used_canvas.height = height;
-  context.font = `${configuring.chat_font_size}px "HarmonyOS Sans SC"`;
+  used_canvas.width = width;
+  context.font = `${local_configurations.chat_font_size}px "HarmonyOS Sans SC"`;
   context.strokeStyle = "black";
   context.fillStyle = "black";
   context.textRendering = "optimizeLegibility";
 
-  if (configuring.debug) {
+  if (local_configurations.debug) {
     draw_line(context, { x: 0, y: 0 }, { x: 0, y: height });
     draw_line(context, { x: width, y: 0 }, { x: width, y: height });
   }
@@ -579,9 +603,8 @@ export async function render_text(
     await line.render(
       context,
       { x: 0, y: height },
-      configuring,
-      width,
-      index === lines.length - 1,
+      local_configurations,
+      index === lines.length - 1 ? 0 : width,
     );
     height += line.shape.below_baseline;
   }

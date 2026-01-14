@@ -56,7 +56,7 @@ class _VideoEncoder:
           "-vcodec",
           "libvpx-vp9",
           "-crf",
-          "12",
+          "4",
           "-b:v",
           "0",
           "-pix_fmt",

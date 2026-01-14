@@ -43,9 +43,9 @@
 
 #### 现有主题
 
-##### 仿聊天气泡主题
+##### 仿聊天气泡
 
-![仿聊天气泡主题](./images/theme-chat-bubble.png)
+![仿聊天气泡](./images/theme-chat-bubble.png)
 
 #### 架构设计
 

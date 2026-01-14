@@ -1,0 +1,57 @@
+.danmaku {
+  position: absolute;
+}
+.danmaku-horizontal-default {
+  right: 0px;
+  transform: translateX(100%);
+}
+.danmaku-horizontal-inverse {
+  left: 0px;
+  transform: translateX(-100%);
+}
+.danmaku-vertical-default {
+  bottom: 0px;
+  transform: translateY(100%);
+}
+.danmaku-vertical-inverse {
+  top: 0px;
+  transform: translateY(-100%);
+}
+
+div.root-peano-container {
+  position: absolute;
+}
+div.root-peano-container-vertical-default {
+  left: 0;
+  bottom: 0;
+  transform: translateY(100%);
+}
+div.root-peano-container-vertical-inverse {
+  left: 0;
+  top: 0;
+  transform: translateY(-100%);
+}
+div.root-peano-container-horizontal-default {
+  right: 0;
+  top: 0;
+  transform: translateX(100%);
+}
+div.root-peano-container-horizontal-inverse {
+  left: 0;
+  top: 0;
+  transform: translateX(-100%);
+}
+div.innermost-container {
+  display: grid;
+  justify-items: start;
+}
+div.innermost-container-vertical {
+  grid-auto-flow: row;
+  grid-auto-columns: auto;
+  grid-auto-rows: min-content;
+}
+div.innermost-container-horizontal {
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  grid-auto-rows: auto;
+}

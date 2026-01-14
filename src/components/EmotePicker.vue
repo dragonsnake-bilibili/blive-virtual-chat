@@ -56,8 +56,6 @@ const emit = defineEmits<{
 
 const current_tab: Ref<string> = ref("new");
 onMounted(() => {
-  console.log("picker.onMounted");
-  console.log(emotes.loaded_packs);
   if (emotes.loaded_packs.size > 0) {
     current_tab.value = `${emotes.loaded_packs.keys().next().value!}/`;
   }
