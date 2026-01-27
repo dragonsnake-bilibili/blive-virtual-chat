@@ -1,22 +1,29 @@
 <template>
   <v-form class="border-thin pa-4 chat-editor">
-    <v-text-field v-model="chat.id" disabled hide-details label="ID" readonly />
     <v-text-field
       v-model.number="chat.enter_millisecond"
       hide-details
-      label="enter time"
+      label="入场时刻"
       suffix="ms"
     />
-    <v-text-field v-model="chat.username" hide-details label="username" />
+    <v-text-field v-model="chat.username" hide-details label="用户名" />
     <v-row>
-      <v-col><v-switch v-model="chat.logos.manager" label="manager" /></v-col>
-      <v-col><v-switch v-model="chat.logos.governor" label="governor" /></v-col>
-      <v-col><v-switch v-model="chat.logos.admiral" label="admiral" /></v-col>
-      <v-col><v-switch v-model="chat.logos.captain" label="captain" /></v-col>
+      <v-col>
+        <v-switch v-model="chat.logos.manager" color="primary" label="管理" />
+      </v-col>
+      <v-col>
+        <v-switch v-model="chat.logos.governor" color="primary" label="总督" />
+      </v-col>
+      <v-col>
+        <v-switch v-model="chat.logos.admiral" color="primary" label="提督" />
+      </v-col>
+      <v-col>
+        <v-switch v-model="chat.logos.captain" color="primary" label="舰长" />
+      </v-col>
     </v-row>
     <v-file-input
       hide-details
-      label="avatar"
+      label="头像"
       @update:model-value="update_avatar"
     />
     <v-textarea
@@ -24,7 +31,7 @@
       v-model="chat.content"
       clearable
       hide-details
-      label="content"
+      label="内容"
       variant="outlined"
     >
       <template #prepend-inner>
@@ -50,6 +57,9 @@
 </template>
 <script setup lang="ts">
 import type { SharedChatConfigure } from "./chat-themes/interface";
+import { useAvatars } from "@/stores/avatars";
+
+const avatars = useAvatars();
 
 const chat = defineModel<SharedChatConfigure>({ required: true });
 
@@ -64,9 +74,9 @@ async function update_avatar(file: File | File[] | undefined | null) {
   }
   const source = Array.isArray(file) ? file[0]! : file;
   if (chat.value.avatar !== "") {
-    URL.revokeObjectURL(chat.value.avatar);
+    avatars.unload_avatar(chat.value.avatar);
   }
-  chat.value.avatar = URL.createObjectURL(source);
+  chat.value.avatar = await avatars.load_avatar(source);
 }
 
 function insert_emote(emote: string) {

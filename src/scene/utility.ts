@@ -34,7 +34,7 @@ export function gather_theme_animations(
         configuring,
       );
     if (animation) {
-      animations.push(animation);
+      animations.push(...animation);
     }
     if (revoke) {
       revokes.push(revoke);
@@ -89,11 +89,19 @@ export class SceneVideoEncoder {
     return new SceneVideoEncoder();
   }
 
-  async add_frame(frame: Blob) {
+  async add_frame(
+    context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  ) {
+    const image = context.getImageData(
+      0,
+      0,
+      context.canvas.width,
+      context.canvas.height,
+    );
     return await fetch(SceneVideoEncoder.#url, {
       method: "POST",
-      body: frame,
-      headers: { "Content-Type": "image/png" },
+      body: image.data,
+      headers: { "Content-Type": "application/octet-stream" },
     });
   }
 
@@ -131,6 +139,11 @@ export class ChatControlBlock {
   #topleft: Coordinate;
   #image: ImageBitmap | undefined = undefined;
   #image_pass2: { image: ImageBitmap; offset?: Size } | undefined = undefined;
+  #entered_scene: { pass1: boolean; pass2: boolean } = {
+    pass1: false,
+    pass2: false,
+  };
+
   #out_of_scene = false;
   #pending_remove = false;
 
@@ -165,7 +178,9 @@ export class ChatControlBlock {
           y: this.#topleft.y + bounding_box_size.height,
         },
       };
-      if (!has_overlap(scene, bounding_box)) {
+      if (has_overlap(scene, bounding_box)) {
+        this.#entered_scene.pass1 = true;
+      } else if (this.#entered_scene.pass1) {
         this.#out_of_scene = true;
         if (this.#image) {
           this.#image.close();
@@ -191,7 +206,9 @@ export class ChatControlBlock {
             this.#image_pass2.image.height,
         },
       };
-      if (!has_overlap(scene, bounding_box)) {
+      if (has_overlap(scene, bounding_box)) {
+        this.#entered_scene.pass2 = true;
+      } else if (this.#entered_scene.pass2) {
         this.#image_pass2.image.close();
         this.#image_pass2 = undefined;
       }
@@ -304,14 +321,17 @@ export class AnimationProgressController {
   }
 
   get_ratio(current_time: number): number {
-    if (current_time < this.time.start) {
-      return 0;
-    }
-    if (current_time > this.time.end) {
-      return 1;
-    }
+    const clamped_time = (() => {
+      if (current_time < this.time.start) {
+        return this.time.start;
+      }
+      if (current_time > this.time.end) {
+        return this.time.end;
+      }
+      return current_time;
+    })();
     return this.#easing_function(
-      (current_time - this.time.start) / (this.time.end - this.time.start),
+      (clamped_time - this.time.start) / (this.time.end - this.time.start),
     );
   }
 

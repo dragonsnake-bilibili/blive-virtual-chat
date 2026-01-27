@@ -1,5 +1,6 @@
 /src/assets/emote-packs/
 *.module.css.d.ts
+images/*.xcf
 
 .DS_Store
 node_modules

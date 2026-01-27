@@ -1,4 +1,4 @@
-import type { DefineComponent } from "vue";
+import type { DefineComponent, InjectionKey } from "vue";
 import type { Configuring } from "../MainView.vue";
 import type { RenderSpace, RenderTime, Size } from "@/utilities/rendering";
 
@@ -65,6 +65,14 @@ export type FullChatConfigure = {
 
 export type ChatDisplay = DefineComponent<
   // props and models
+  // Only configurations created by the theme itself is passed into these components, which shared global
+  //  configurations are applied via following CSS classes / selectors:
+  //   .chat-container: the outmost element of a chat, which must represent the exact bounding box of the chat
+  //   img.chat-content-image: emotes in content
+  //   img.chat-logo: badges
+  //   .chat-avatar: user avatar
+  // If shared configuration is otherwise required, consult provided value accessible with the following key:
+  //  inj_SharedGlobalConfigurations
   { chatConfig: FullChatConfigure; globalConfig: ThemeSpecifiedConfiguration },
   // raw bindings
   any,
@@ -81,6 +89,8 @@ export type ChatDisplay = DefineComponent<
   // emits
   {}
 >;
+export const inj_SharedGlobalConfigurations =
+  Symbol() as InjectionKey<Configuring>;
 
 export type FullGlobalConfigure = {
   shared: Configuring;
@@ -96,7 +106,7 @@ export type FullGlobalConfigure = {
 // A canvas might be passed to this function to reuse for lower overhead, whose state can be modified at will.
 //  No assumption should be made to the metadata or content of the canvas.
 // The rendered image, in image/png format, together with the canvas used should be returned to the caller.
-//  The background of the image should match configuration to the scene, but the width of the rendered chat
+//  The background of the image should be transparent and the width of the rendered chat
 //  should only be limited by maximum chat width, not the size of scene.
 // The canvas should be resized to the exact size of the rendered image.
 export type ChatRenderer = (
@@ -213,7 +223,14 @@ export type ThemeSpecification = {
   global_configure: GlobalConfigureForm;
   display: ChatDisplay;
   editor: ChatConfigureForm;
+
+  // prepare the per-chat configuration
+  //
+  // This function is called to initialize configuration of every newly created chat before it becomes visible
+  //  to the editor, so that the editor can be sure that all required entries have already been filled with
+  //  default value. This function will also be invoked on all existing chats when the theme is switched
   prepare_chat: (chat: FullChatConfigure) => void;
+
   render: ChatRenderer;
 
   // build the entering animation for a chat to preview it
@@ -225,7 +242,7 @@ export type ThemeSpecification = {
     chat: FullChatConfigure,
     element: Element,
     configuring: FullGlobalConfigure,
-  ) => { animation?: Animation; revoke?: () => void };
+  ) => { animation?: Animation[]; revoke?: () => void };
 
   // build RenderingChat instance for rendering
   //

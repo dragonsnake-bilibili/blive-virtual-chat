@@ -81,7 +81,6 @@ div.container {
   display: inline-flex;
   align-items: start;
   gap: v-bind("`${global.avatar_gap}px`");
-  font-family: "HarmonyOS Sans SC";
 }
 div.header {
   margin-bottom: v-bind("`${global.username_to_bubble}px`");

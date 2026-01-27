@@ -1,5 +1,5 @@
 .danmaku {
-  position: absolute;
+  position: absolute !important;
 }
 .danmaku-horizontal-default {
   right: 0px;
@@ -41,17 +41,15 @@ div.root-peano-container-horizontal-inverse {
   top: 0;
   transform: translateX(-100%);
 }
-div.innermost-container {
-  display: grid;
-  justify-items: start;
+div.chat-list-container-vertical-default {
+  flex-direction: column;
 }
-div.innermost-container-vertical {
-  grid-auto-flow: row;
-  grid-auto-columns: auto;
-  grid-auto-rows: min-content;
+div.chat-list-container-vertical-inverse {
+  flex-direction: column-reverse;
 }
-div.innermost-container-horizontal {
-  grid-auto-flow: column;
-  grid-auto-columns: max-content;
-  grid-auto-rows: auto;
+div.chat-list-container-horizontal-default {
+  flex-direction: row;
+}
+div.chat-list-container-horizontal-inverse {
+  flex-direction: row-reverse;
 }

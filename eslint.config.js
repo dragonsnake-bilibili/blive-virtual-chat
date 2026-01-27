@@ -55,6 +55,7 @@ export default vuetify(
       ],
       "@stylistic/arrow-parens": ["error", "always"],
       "@stylistic/indent": ["off"],
+      "@stylistic/indent-binary-ops": ["off"],
     },
   },
 );

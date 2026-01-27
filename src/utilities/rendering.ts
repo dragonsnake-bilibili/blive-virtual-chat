@@ -1,7 +1,9 @@
+import type { SharedChatConfigure } from "@/components/chat-themes/interface";
 import type {
   FlowDirectionType,
   MainAxisDirectionType,
 } from "@/components/MainView.vue";
+import { useEmotes } from "@/stores/emotes";
 
 // time information for reference during the rendering procedure
 //
@@ -165,6 +167,10 @@ export function draw_rectangle(
   top_left: Coordinate,
   size: Size,
   rounded_corder: number | [number, number, number, number],
+  options?: {
+    stroke?: boolean;
+    fill?: boolean;
+  },
 ) {
   const maximum_radius = Math.min(size.height, size.width) / 2;
   const radius = (
@@ -200,7 +206,12 @@ export function draw_rectangle(
     );
   }
   context.closePath();
-  context.fill();
+  if (options?.fill) {
+    context.fill();
+  }
+  if (options?.stroke) {
+    context.stroke();
+  }
   return result;
 }
 
@@ -221,6 +232,131 @@ export function draw_line(
   context.strokeStyle = backup;
 }
 
+// render a smooth curve through specified sequence of points
+//
+// This function uses cubic Bézier curves to connect the specified sequence of points where the final curve
+//  is smooth (has continuous first-order derivative). Specifying less than 2 points in the sequence will be
+//  a no-op.
+// The first-order derivative at every specified point is decided by the slope of line connecting the previous
+//  and next point in the sequence, on which line the second control point for the Bézier curves from the
+//  previous point to current point and the first control point for the one from current point to next point
+//  is placed. control_point_scale configures how far these control points is placed away from current point.
+// Due to how the first-order derivative is calculated, the input sequence must be padded so that the first
+//  control point and the last control point of the whole curve can be placed. boundary controls how dummy
+//  point is padded, which can take one of the following values:
+//  duplicate: duplicate the first and last point as padded points
+//  mirror: move the second point towards the first point by a distance equal to twice the distance between
+//   them; the same applies to the end of the sequence
+//  cycle: duplicate the first point after the last one and the last one before the first one. This is a
+//   special mode: the curve is closed automatically in this mode
+export function bezier_through(
+  context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  points: Coordinate[],
+  options?: {
+    control_point_scale?: { first?: number; second?: number };
+    boundary?: "duplicate" | "mirror" | "cycle";
+  },
+) {
+  if (points.length <= 1) {
+    return;
+  }
+  const helper_points = ((): [Coordinate, Coordinate] => {
+    const boundary = options?.boundary ?? "duplicate";
+    switch (boundary) {
+      case "duplicate": {
+        return [points.at(0)!, points.at(-1)!];
+      }
+      case "mirror": {
+        function mirror(source: Coordinate, by: Coordinate): Coordinate {
+          const { x: x_source, y: y_source } = source;
+          const { x: x_mirror, y: y_mirror } = by;
+          return {
+            x: x_mirror + x_mirror - x_source,
+            y: y_mirror + y_mirror - y_source,
+          };
+        }
+        return [
+          mirror(points.at(1)!, points.at(0)!),
+          mirror(points.at(-2)!, points.at(-1)!),
+        ];
+      }
+      case "cycle": {
+        return [points.at(-1)!, points.at(0)!];
+      }
+    }
+  })();
+  const padded_points = [helper_points[0], ...points, helper_points[1]];
+  const a = options?.control_point_scale?.first ?? 0.25;
+  const b = options?.control_point_scale?.second ?? 0.25;
+  const full_points: Coordinate[] = [];
+  for (let i = 1; i <= points.length; i++) {
+    const { x: x_last, y: y_last } = padded_points[i - 1]!;
+    const { x: x_current, y: y_current } = padded_points[i]!;
+    const { x: x_next, y: y_next } = padded_points[i + 1]!;
+
+    const vector: [number, number] = [x_next - x_last, y_next - y_last];
+    full_points.push(
+      {
+        x: x_current - b * vector[0],
+        y: y_current - b * vector[1],
+      },
+      { x: x_current, y: y_current },
+      {
+        x: x_current + a * vector[0],
+        y: y_current + a * vector[1],
+      },
+    );
+  }
+  const final_points =
+    (options?.boundary ?? "duplicate") === "cycle"
+      ? [...full_points.slice(2), ...full_points.slice(0, 2)]
+      : full_points.slice(2, -1);
+  context.beginPath();
+  context.moveTo(points[0]!.x, points[0]!.y);
+  for (let i = 0; i < final_points.length; i += 3) {
+    const { x: x_a, y: y_a } = final_points[i]!;
+    const { x: x_b, y: y_b } = final_points[i + 1]!;
+    const { x, y } = final_points[i + 2]!;
+    context.bezierCurveTo(x_a, y_a, x_b, y_b, x, y);
+  }
+  context.stroke();
+}
+
+// prepare images used to render badges
+//
+// This function takes a shared chat configuration and checks badges applied to it. The corresponding images
+//  are then loaded from the emote provider and resized to the specified size. Note that if some image cannot
+//  be loaded, it will not appear in the array returned.
+export async function prepare_badges(
+  chat: SharedChatConfigure,
+  size: number,
+): Promise<ImageBitmap[]> {
+  const result: ImageBitmap[] = [];
+  const emote = useEmotes();
+  for (const [included, id] of [
+    [chat.logos.manager, "special/房管"],
+    [chat.logos.governor, "special/总督"],
+    [chat.logos.admiral, "special/提督"],
+    [chat.logos.captain, "special/舰长"],
+  ] as [boolean, string][]) {
+    if (!included) {
+      continue;
+    }
+    const image = emote.find_emote(id);
+    if (image === undefined) {
+      continue;
+    }
+    const image_bytes = await (await fetch(image)).blob();
+    const bitmap = await window.createImageBitmap(image_bytes, {
+      resizeHeight: size,
+      resizeWidth: size,
+      resizeQuality: "high",
+    });
+    result.push(bitmap);
+  }
+  return result;
+}
+
 export async function canvas_to_blob(
   canvas: HTMLCanvasElement | OffscreenCanvas,
 ): Promise<Blob> {
@@ -231,4 +367,36 @@ export async function canvas_to_blob(
           canvas.toBlob((blob) => resolve(blob!), "image/png");
         });
   return build_image;
+}
+
+// helper to save / restore / transfer drawing state, possibly across canvas resizes
+//  note that this class only handles a limited set of drawing states that we use
+export class CanvasDrawingState {
+  #state: {
+    font: CanvasRenderingContext2D["font"];
+    fill_style: CanvasRenderingContext2D["fillStyle"];
+    stroke_style: CanvasRenderingContext2D["strokeStyle"];
+    text_rendering: CanvasRenderingContext2D["textRendering"];
+    global_alpha: CanvasRenderingContext2D["globalAlpha"];
+  };
+
+  constructor(
+    context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  ) {
+    this.#state = {
+      font: context.font,
+      fill_style: context.fillStyle,
+      stroke_style: context.strokeStyle,
+      text_rendering: context.textRendering,
+      global_alpha: context.globalAlpha,
+    };
+  }
+
+  apply(context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D) {
+    context.font = this.#state.font;
+    context.fillStyle = this.#state.fill_style;
+    context.strokeStyle = this.#state.stroke_style;
+    context.textRendering = this.#state.text_rendering;
+    context.globalAlpha = this.#state.global_alpha;
+  }
 }

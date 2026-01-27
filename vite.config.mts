@@ -10,6 +10,7 @@ import { defineConfig } from "vite";
 import { patchCssModules } from "vite-css-modules";
 import Layouts from "vite-plugin-vue-layouts-next";
 import Vuetify, { transformAssetUrls } from "vite-plugin-vuetify";
+import svgLoader from "vite-svg-loader";
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -34,6 +35,7 @@ export default defineConfig({
       vueTemplate: true,
     }),
     Components({
+      globs: ["src/components/*.vue", "!src/components/chat-themes/*/*.vue"],
       dts: "src/components.d.ts",
     }),
     Vue({
@@ -59,6 +61,7 @@ export default defineConfig({
       },
     }),
     patchCssModules({ generateSourceTypes: true }),
+    svgLoader({ defaultImport: "component" }),
   ],
   optimizeDeps: {
     exclude: [

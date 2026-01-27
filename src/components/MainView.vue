@@ -2,16 +2,18 @@
   <v-row id="fullscreen-target" justify="space-between">
     <v-col :class="configuring.running_mode ? '' : 'flex-grow-0'">
       <div class="scene">
-        <component
-          :is="configuring.selected_theme.display"
-          v-for="(chat, index) in chats"
-          v-if="configuring.selected_theme !== null"
-          :id="`chat-${chat.shared.id}`"
-          :key="chat.shared.id"
-          :chat-config="chat"
-          :global-config="themed_configuring"
-          @click="edit_chat(index)"
-        />
+        <div class="chat-list-container chat-list-container-default">
+          <component
+            :is="configuring.selected_theme.display"
+            v-for="(chat, index) in chats"
+            v-if="configuring.selected_theme !== null"
+            :id="`chat-${chat.shared.id}`"
+            :key="chat.shared.id"
+            :chat-config="chat"
+            :global-config="themed_configuring"
+            @click="edit_chat(index)"
+          />
+        </div>
       </div>
     </v-col>
     <v-col class="flex-grow-1">
@@ -71,7 +73,7 @@
             <v-row>
               <v-col>
                 <div>
-                  <p style="text-align: center">Background</p>
+                  <p style="text-align: center">场景背景</p>
                   <v-color-picker
                     v-model="configuring.background"
                     class="mx-auto"
@@ -135,14 +137,14 @@
                 <v-text-field
                   v-model.number="configuring.chat_font_size"
                   hide-details
-                  label="chat font size"
+                  label="字体大小"
                 />
               </v-col>
               <v-col cols="6">
                 <v-text-field
                   v-model.number="configuring.chat_logo_size"
                   hide-details
-                  label="chat logo size"
+                  label="徽章尺寸"
                   suffix="pixel"
                 />
               </v-col>
@@ -150,7 +152,7 @@
                 <v-text-field
                   v-model.number="configuring.chat_emote_size"
                   hide-details
-                  label="chat emote size"
+                  label="表情尺寸"
                   suffix="pixel"
                 />
               </v-col>
@@ -158,7 +160,7 @@
                 <v-text-field
                   v-model.number="configuring.lift_duration"
                   hide-details
-                  label="lift duration"
+                  label="消息位置调整时长"
                   suffix="ms"
                 />
               </v-col>
@@ -166,7 +168,7 @@
                 <v-text-field
                   v-model.number="configuring.enter_duration"
                   hide-details
-                  label="enter duration"
+                  label="消息入场时长"
                   suffix="ms"
                 />
               </v-col>
@@ -174,7 +176,7 @@
                 <v-text-field
                   v-model.number="configuring.delay_before_start"
                   hide-details
-                  label="delay after the scene is set and before the animation is played"
+                  label="开始前延迟时长"
                   suffix="ms"
                 />
               </v-col>
@@ -182,7 +184,7 @@
                 <v-text-field
                   v-model.number="configuring.keep_after_end"
                   hide-details
-                  label="keep final state after end"
+                  label="结束后保持时长"
                   suffix="ms"
                 />
               </v-col>
@@ -204,20 +206,36 @@
         </v-card>
         <v-divider v-if="configuring.selected_theme !== null" />
         <v-card v-if="configuring.selected_theme !== null && chat_editor.show">
-          <v-card-title>弹幕设置</v-card-title>
-          <v-card-text>
-            <chat-editor v-model="chats[chat_editor.target]!.shared" />
-            <v-divider />
-            <component
-              :is="configuring.selected_theme!.editor"
-              v-if="chat_editor.show"
-              v-model="chats[chat_editor.target]!.themed"
-            />
-          </v-card-text>
+          <v-card>
+            <v-card-title>通用消息设置</v-card-title>
+            <v-card-subtitle>
+              消息的基础信息，切换主题不变且总有意义
+            </v-card-subtitle>
+            <v-card-text>
+              <chat-editor v-model="chats[chat_editor.target]!.shared" />
+            </v-card-text>
+          </v-card>
+          <v-divider />
+          <v-card>
+            <v-card-title>主题消息设置</v-card-title>
+            <v-card-subtitle>
+              仅在当前主题下生效的设置，切换后会消失
+            </v-card-subtitle>
+            <v-card-text>
+              <component
+                :is="configuring.selected_theme!.editor"
+                v-if="chat_editor.show"
+                v-model="chats[chat_editor.target]!.themed"
+              />
+            </v-card-text>
+          </v-card>
           <v-card-actions>
             <v-row>
               <v-col>
                 <v-btn block @click="render_single_chat"> 渲染 </v-btn>
+              </v-col>
+              <v-col>
+                <v-btn block @click="duplicate_chat"> 复制 </v-btn>
               </v-col>
               <v-col>
                 <v-btn block color="warning" @click="cancel_chat">
@@ -235,7 +253,7 @@
           block
           @click="new_chat"
         >
-          新弹幕
+          新消息
         </v-btn>
         <v-divider v-if="configuring.selected_theme !== null" />
         <v-row v-if="configuring.selected_theme !== null">
@@ -261,35 +279,47 @@
           <v-expansion-panel v-model="import_export.show">
             <v-expansion-panel-title>导入/导出</v-expansion-panel-title>
             <v-expansion-panel-text>
-              <v-textarea v-model="import_export.content" />
+              <v-file-input
+                v-model="import_export.content"
+                label="选择文件开始导入"
+              />
               <v-row>
                 <v-col v-if="configuring.selected_theme !== null">
                   <v-btn block @click="do_export">导出</v-btn>
                 </v-col>
-                <v-col>
-                  <v-btn
-                    block
-                    @click="do_import({ config: true, content: true })"
-                  >
-                    导入
-                  </v-btn>
-                </v-col>
-                <v-col>
-                  <v-btn
-                    block
-                    @click="do_import({ config: true, content: false })"
-                  >
-                    仅导入配置
-                  </v-btn>
-                </v-col>
-                <v-col v-if="configuring.selected_theme !== null">
-                  <v-btn
-                    block
-                    @click="do_import({ config: false, content: true })"
-                  >
-                    仅导入内容
-                  </v-btn>
-                </v-col>
+                <template
+                  v-if="
+                    import_export.content !== null &&
+                    import_export.content !== undefined &&
+                    (!Array.isArray(import_export.content) ||
+                      import_export.content.length > 0)
+                  "
+                >
+                  <v-col>
+                    <v-btn
+                      block
+                      @click="do_import({ config: true, content: true })"
+                    >
+                      导入
+                    </v-btn>
+                  </v-col>
+                  <v-col>
+                    <v-btn
+                      block
+                      @click="do_import({ config: true, content: false })"
+                    >
+                      仅导入配置
+                    </v-btn>
+                  </v-col>
+                  <v-col v-if="configuring.selected_theme !== null">
+                    <v-btn
+                      block
+                      @click="do_import({ config: false, content: true })"
+                    >
+                      仅导入内容
+                    </v-btn>
+                  </v-col>
+                </template>
               </v-row>
             </v-expansion-panel-text>
           </v-expansion-panel>
@@ -313,20 +343,31 @@
 
 <script setup lang="ts">
 import type { Reactive, Ref, ShallowReactive } from "vue";
-import type {
-  FullChatConfigure,
-  FullGlobalConfigure,
-  SharedChatConfigure,
-  ThemeSpecification,
-  ThemeSpecifiedConfiguration,
-} from "./chat-themes/interface";
-import { computed, nextTick, reactive, ref, shallowReactive } from "vue";
+import {
+  computed,
+  nextTick,
+  provide,
+  reactive,
+  ref,
+  shallowReactive,
+  toRaw,
+} from "vue";
 import { useGoTo } from "vuetify";
 import SceneVariants from "@/scene";
+import { useAvatars } from "@/stores/avatars";
 import { useDialog } from "@/stores/dialog";
 import CHAT_THEMES from "./chat-themes";
+import {
+  type FullChatConfigure,
+  type FullGlobalConfigure,
+  inj_SharedGlobalConfigurations,
+  type SharedChatConfigure,
+  type ThemeSpecification,
+  type ThemeSpecifiedConfiguration,
+} from "./chat-themes/interface";
 const goto = useGoTo();
 const dialog = useDialog();
+const avatars = useAvatars();
 
 function build_empty_chat(): SharedChatConfigure {
   return {
@@ -349,7 +390,7 @@ const configuring: ShallowReactive<Configuring> = shallowReactive({
   running_mode: false,
   selected_theme: null,
   preselected_theme: null,
-  selected_mode: null,
+  selected_mode: SceneVariants[0] ?? null,
   main_axis: "vertical",
   flow_direction: "default",
   scene_width: 400,
@@ -361,12 +402,14 @@ const configuring: ShallowReactive<Configuring> = shallowReactive({
   chat_font_size: 18,
   chat_logo_size: 20,
   chat_emote_size: 24,
+  font_family: "HarmonyOS Sans SC",
   lift_duration: 100,
   enter_duration: 400,
   delay_before_start: 500,
   keep_after_end: 500,
   background: "#ffffff",
 });
+provide(inj_SharedGlobalConfigurations, configuring);
 const themed_configuring: Ref<ThemeSpecifiedConfiguration> = ref({
   theme: "",
   content: {},
@@ -387,6 +430,7 @@ function switch_theme() {
   }
   for (const chat of chats) {
     configuring.preselected_theme.prepare_chat(chat);
+    chat.themed.theme = configuring.selected_theme!.name;
   }
   configuring.selected_theme = configuring.preselected_theme;
 }
@@ -407,6 +451,7 @@ function new_chat() {
     themed: { theme: "", content: {} },
   };
   configuring.selected_theme!.prepare_chat(base);
+  base.themed.theme = configuring.selected_theme!.name;
   chat_editor.target = chats.push(base) - 1;
   chat_editor.creating = true;
   chat_editor.show = true;
@@ -419,15 +464,35 @@ function edit_chat(index: number) {
   chat_editor.target = index;
   chat_editor.show = true;
 }
+function duplicate_chat() {
+  const source = chats[chat_editor.target]!;
+  const new_chat: FullChatConfigure = structuredClone(toRaw(source));
+  new_chat.shared.id = crypto.randomUUID();
+  avatars.register_new_reference(new_chat.shared.avatar);
+  chats.splice(chat_editor.target + 1, 0, new_chat);
+  chat_editor.target = chat_editor.target + 1;
+}
 function cancel_chat() {
   chat_editor.show = false;
+  const target = chats[chat_editor.target]!;
+  avatars.unload_avatar(target.shared.avatar);
   chats.splice(chat_editor.target, 1);
 }
 function finish_chat() {
   chat_editor.show = false;
-  chats.sort(
+  const sorted_chats = chats.toSorted(
     (lhs, rhs) => lhs.shared.enter_millisecond - rhs.shared.enter_millisecond,
   );
+  chats.splice(0, chats.length, ...sorted_chats);
+}
+
+function save_file(content: Blob, name: string) {
+  const url = URL.createObjectURL(content);
+  const downloader = document.createElement("a");
+  downloader.href = url;
+  downloader.download = name;
+  downloader.click();
+  URL.revokeObjectURL(url);
 }
 
 function render_single_chat() {
@@ -435,12 +500,7 @@ function render_single_chat() {
   configuring
     .selected_theme!.render(chat, full_global_configure.value)
     .then(({ image }) => {
-      const url = URL.createObjectURL(image);
-      const downloader = document.createElement("a");
-      downloader.href = url;
-      downloader.download = `${chat.shared.username}.png`;
-      downloader.click();
-      URL.revokeObjectURL(url);
+      save_file(image, `${chat.shared.username}.png`);
     });
 }
 
@@ -505,30 +565,27 @@ function record() {
 
 const import_export: Reactive<{
   show: boolean;
-  content: string;
+  content: File[] | File | undefined | null;
 }> = reactive({
   show: false,
-  content: "",
+  content: null,
 });
 
 async function do_export() {
-  const convert_chats = chats.map(async (chat) => {
+  const { data: dumped_avatar, url_mapping } = await avatars.dump();
+  const convert_chats = chats.map((chat) => {
     if (chat.shared.avatar === "") {
       return chat;
     }
-    const avatar = chat.shared.avatar;
-    const load = await fetch(avatar);
-    const bytes = await load.bytes();
     return {
       shared: {
         ...chat.shared,
-        // @ts-ignore
-        avatar: bytes.toBase64(),
+        avatar: url_mapping.get(chat.shared.avatar),
       },
       themed: chat.themed,
     };
   });
-  import_export.content = JSON.stringify({
+  const result = JSON.stringify({
     configuring: {
       shared: {
         ...configuring,
@@ -538,11 +595,30 @@ async function do_export() {
       },
       themed: themed_configuring.value,
     },
+    avatars: dumped_avatar,
     chats: await Promise.all(convert_chats),
   });
+  save_file(
+    new Blob([new TextEncoder().encode(result)], { type: "application/json" }),
+    "saved-chats.json",
+  );
 }
 async function do_import(part: { config: boolean; content: boolean }) {
-  const data = JSON.parse(import_export.content);
+  if (import_export.content === null || import_export.content === undefined) {
+    return;
+  }
+  if (
+    Array.isArray(import_export.content) &&
+    import_export.content.length === 0
+  ) {
+    return;
+  }
+  const source = Array.isArray(import_export.content)
+    ? import_export.content[0]!
+    : import_export.content;
+  import_export.content = null;
+  const raw_data = await source.bytes();
+  const data = JSON.parse(new TextDecoder().decode(raw_data));
   if (part.config) {
     for (const [key, value] of Object.entries(data.configuring.shared)) {
       if (["selected_theme", "selected_mode"].includes(key)) {
@@ -574,17 +650,15 @@ async function do_import(part: { config: boolean; content: boolean }) {
   }
   if (part.content) {
     chats.splice(0);
+    const url_mapping: Map<string, string> = avatars.load(data.avatars);
     for (const chat of data.chats) {
-      if (chat.shared.avatar === "") {
+      if (chat.shared.avatar === "" || chat.shared.avatar === undefined) {
         chats.push(chat);
       } else {
         chats.push({
           shared: {
             ...chat.shared,
-            avatar: URL.createObjectURL(
-              // @ts-ignore
-              new Blob([Uint8Array.fromBase64(chat.shared.avatar)]),
-            ),
+            avatar: url_mapping.get(chat.shared.avatar) ?? "",
           },
           themed: chat.themed,
         });
@@ -594,7 +668,7 @@ async function do_import(part: { config: boolean; content: boolean }) {
 }
 </script>
 <script lang="ts">
-const MainAxisDirection = { vertical: "垂直", horizontal: "水平" } as const;
+const MainAxisDirection = { vertical: "竖直", horizontal: "水平" } as const;
 export type MainAxisDirectionType = keyof typeof MainAxisDirection;
 const FlowDirection = { default: "默认", inverse: "反向" } as const;
 export type FlowDirectionType = keyof typeof FlowDirection;
@@ -615,6 +689,7 @@ export type Configuring = {
   chat_font_size: number;
   chat_logo_size: number;
   chat_emote_size: number;
+  font_family: string;
   lift_duration: number;
   enter_duration: number;
   delay_before_start: number;
@@ -631,12 +706,16 @@ div.scene {
   height: v-bind("`${configuring.scene_height}px`");
   margin: 0 auto;
   background-color: v-bind("configuring.background");
-  display: grid;
-  grid-auto-flow: row;
-  grid-auto-columns: auto;
-  grid-auto-rows: min-content;
-  justify-items: start;
+  border-style: v-bind("configuring.debug ? 'solid' : 'none'");
+  border-color: rgb(var(--v-theme-primary));
+}
+div.chat-list-container {
+  display: flex;
   gap: v-bind("`${configuring.chat_margin}px`");
+  align-items: flex-start;
+}
+div.chat-list-container-default {
+  flex-direction: column;
 }
 
 .config-area {
@@ -650,6 +729,8 @@ div.scene {
 .chat-container {
   font-size: v-bind("`${configuring.chat_font_size}px`");
   max-width: v-bind("`${configuring.chat_width_limit}px`");
+  font-family: v-bind("configuring.font_family");
+  flex-shrink: 0;
 }
 img.chat-content-image {
   vertical-align: sub;

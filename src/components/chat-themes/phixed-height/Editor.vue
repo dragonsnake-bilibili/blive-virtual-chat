@@ -1,24 +1,13 @@
 <template>
   <v-row>
-    <v-col>
+    <v-col class="mx-auto" cols="6">
       <div>
-        <p style="text-align: center">用户名颜色</p>
+        <p style="text-align: center">文字颜色</p>
         <v-color-picker
-          v-model="chat.name_color"
+          v-model="chat.color"
           class="mx-auto"
           show-swatches
-          :swatches="[['#25885B'], ['#638CF8'], ['#FFFFFF']]"
-        />
-      </div>
-    </v-col>
-    <v-col>
-      <div>
-        <p style="text-align: center">气泡颜色</p>
-        <v-color-picker
-          v-model="chat.bubble_color"
-          class="mx-auto"
-          show-swatches
-          :swatches="[['#2BEA28'], ['#2960FB'], ['#FFFFFF']]"
+          :swatches="[['#007FFF'], ['#B040F0'], ['#FFFFFF']]"
         />
       </div>
     </v-col>

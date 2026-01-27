@@ -11,7 +11,6 @@ import {
 } from "@/components/chat-themes/interface";
 import { AnimationProgressController } from "@/scene/utility";
 import { useDialog } from "@/stores/dialog";
-import { useEmotes } from "@/stores/emotes";
 import easing_functions from "@/utilities/easing-functions";
 import {
   canvas_to_blob,
@@ -21,6 +20,7 @@ import {
   draw_rectangle,
   get_flow_sign,
   prepare_avatar,
+  prepare_badges,
   prepare_canvas,
   type RenderSpace,
   type RenderTime,
@@ -60,28 +60,13 @@ async function render_username_line(
   const ex =
     ex_measure.actualBoundingBoxAscent + ex_measure.actualBoundingBoxDescent;
   // calculate full width and full height
-  const padding = username_height * 0.25;
-  const pure_character_height = username_height + padding * 2;
-  const logo_align_line_offset =
-    padding + measure.fontBoundingBoxAscent - ex / 2;
-  const logo_count = (() => {
-    let result = 0;
-    if (chat.shared.logos.admiral) {
-      result += 1;
-    }
-    if (chat.shared.logos.captain) {
-      result += 1;
-    }
-    if (chat.shared.logos.governor) {
-      result += 1;
-    }
-    if (chat.shared.logos.manager) {
-      result += 1;
-    }
-    return result;
-  })();
+  const logo_align_line_offset = measure.fontBoundingBoxAscent - ex / 2;
+  const badges = await prepare_badges(
+    chat.shared,
+    configuring.shared.chat_logo_size,
+  );
   const [character_top, logo_top] = (() => {
-    if (logo_count > 0) {
+    if (badges.length > 0) {
       const difference =
         logo_align_line_offset - configuring.shared.chat_logo_size / 2;
       if (difference < 0) {
@@ -92,18 +77,17 @@ async function render_username_line(
     return [0, -configuring.shared.chat_logo_size];
   })();
   const total_height = Math.max(
-    character_top + pure_character_height,
+    character_top + username_height,
     logo_top + configuring.shared.chat_logo_size,
   );
-  const unadjusted_badge_width =
-    (configuring.shared.chat_logo_size + themed_configs.badge_gap) * logo_count;
-  const adjusted_badge_width =
-    unadjusted_badge_width -
-    themed_configs.badge_gap +
-    themed_configs.username_to_badge;
-  const total_width =
-    username_width + (logo_count > 0 ? adjusted_badge_width : 0);
-  const baseline_y = character_top + padding + measure.fontBoundingBoxAscent;
+  const badges_width =
+    badges.length > 0
+      ? themed_configs.username_to_badge +
+        badges.length * configuring.shared.chat_logo_size +
+        (badges.length - 1) * themed_configs.badge_gap
+      : 0;
+  const total_width = username_width + badges_width;
+  const baseline_y = character_top + measure.fontBoundingBoxAscent;
 
   // update canvas
   const font_backup = context.font;
@@ -116,44 +100,21 @@ async function render_username_line(
 
   // render it
   context.fillText(chat.shared.username, x_adjustment, baseline_y);
-  if (logo_count > 0) {
-    let current_x =
-      x_adjustment + username_width + themed_configs.username_to_badge;
-    const emote = useEmotes();
-    for (const [included, id] of [
-      [chat.shared.logos.manager, "special/房管"],
-      [chat.shared.logos.governor, "special/总督"],
-      [chat.shared.logos.admiral, "special/提督"],
-      [chat.shared.logos.captain, "special/舰长"],
-    ] as [boolean, string][]) {
-      if (!included) {
-        continue;
-      }
-      const image = emote.find_emote(id)!;
-      const image_bytes = await (await fetch(image)).blob();
-      const bitmap = await window.createImageBitmap(image_bytes, {
-        resizeHeight: configuring.shared.chat_logo_size,
-        resizeWidth: configuring.shared.chat_logo_size,
-        resizeQuality: "high",
-      });
-      context.drawImage(bitmap, current_x, logo_top);
-      current_x += configuring.shared.chat_logo_size;
-      bitmap.close();
-      current_x += themed_configs.badge_gap;
-    }
+  let current_x =
+    x_adjustment + username_width + themed_configs.username_to_badge;
+  for (const badge of badges) {
+    context.drawImage(badge, current_x, logo_top);
+    badge.close();
+    current_x += configuring.shared.chat_logo_size + themed_configs.badge_gap;
   }
 
   // render debugging helpers
   if (configuring.shared.debug) {
+    draw_line(context, { x: 0, y: 0 }, { x: 0, y: context.canvas.height });
     draw_line(
       context,
-      { x: x_adjustment, y: 0 },
-      { x: x_adjustment, y: context.canvas.height },
-    );
-    draw_line(
-      context,
-      { x: x_adjustment + username_width, y: 0 },
-      { x: x_adjustment + username_width, y: context.canvas.height },
+      { x: username_width, y: 0 },
+      { x: username_width, y: context.canvas.height },
     );
     draw_line(
       context,
@@ -171,6 +132,9 @@ async function render(
 ): Promise<{ image: Blob; canvas: HTMLCanvasElement | OffscreenCanvas }> {
   // prepare canvas
   const [used_canvas, context] = prepare_canvas(canvas);
+  context.font = `${configuring.shared.chat_font_size}px "${configuring.shared.font_family}"`;
+  context.textRendering = "optimizeLegibility";
+  context.fillStyle = "black";
 
   // make it easier to access theme-specific configurations
   const themed_configs = configuring.themes.content as GlobalConfigures;
@@ -255,38 +219,27 @@ async function render(
     bubble_top_left,
     { width: bubble_width, height: bubble_height },
     config_radius,
+    { fill: true },
   )[0];
   function get_coordinate(angle: number): [number, number] {
     const t =
       radius *
       (Math.cos(angle) + Math.sin(angle) - Math.sqrt(Math.sin(2 * angle))) *
-      1.05;
+      1.1;
     return [t * Math.cos(angle), t * Math.sin(angle)];
   }
-  function inward_angle_to_outward(angle: number): [number, [number, number]] {
-    const coordinate = get_coordinate(angle);
-    const difference = Math.acos((radius - coordinate[0]) / radius);
-    return [Math.PI + difference, coordinate];
-  }
-  const [start, start_point] = inward_angle_to_outward(
-    Math.PI * themed_configs.start_angle,
-  );
-  const [end] = inward_angle_to_outward(Math.PI * themed_configs.end_angle);
+  const start_point = get_coordinate(Math.PI * themed_configs.start_angle);
+  const end_point = get_coordinate(Math.PI * themed_configs.end_angle);
   context.beginPath();
   context.moveTo(bubble_top_left.x, bubble_top_left.y);
   context.lineTo(
     bubble_top_left.x + start_point[0],
     bubble_top_left.y + start_point[1],
   );
-  context.arc(
-    bubble_top_left.x + radius,
-    bubble_top_left.y + radius,
-    radius,
-    start,
-    end,
-    true,
+  context.lineTo(
+    bubble_top_left.x + end_point[0],
+    bubble_top_left.y + end_point[1],
   );
-  context.lineTo(bubble_top_left.x, bubble_top_left.y);
   context.closePath();
   context.fill();
 
@@ -307,7 +260,7 @@ function prepare_entering_animation(
   chat: FullChatConfigure,
   element: Element,
   configuring: FullGlobalConfigure,
-): { animation?: Animation; revoke?: () => void } {
+): { animation?: Animation[]; revoke?: () => void } {
   if (configuring.shared.selected_mode!.name === "danmaku") {
     return {};
   }
@@ -334,7 +287,7 @@ function prepare_entering_animation(
     ),
   );
   return {
-    animation,
+    animation: [animation],
     revoke: () => {
       element.classList.remove(styles["hide-by-transparent"]);
     },
@@ -441,7 +394,6 @@ const CHAT_BUBBLE: ThemeSpecification = {
   display: ChatBubbleDisplay,
   prepare_chat: (chat: FullChatConfigure) => {
     if (chat.themed.theme !== name) {
-      chat.themed.theme = name;
       chat.themed.content = { ...DefaultConfigure };
     }
   },

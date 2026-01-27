@@ -4,9 +4,9 @@ import {
   type FullGlobalConfigure,
   RenderingChat,
 } from "@/components/chat-themes/interface";
+import { useDialog } from "@/stores/dialog";
 import preview_styles from "@/styles/scene-previews.module.css";
 import {
-  canvas_to_blob,
   type Coordinate,
   get_flow_sign,
   type RenderTime,
@@ -70,7 +70,7 @@ class DanmakuTrackerAllocator {
   // Therefore, the speed on any chat can be calculated as v = n / enter_duration
   //  the time it would be visible in the scene is t = (n + m) / v, where m is the length of the scene along
   //  the main axis
-  // The lift duration establishes a minimum gap required between two chats that overlaps on the main axis
+  // The lift duration establishes a minimum gap required between two chats that overlaps on the cross axis
   //  the distance along the main axis between such two chats shall never below the distance the the slower
   //  one can travel in such duration
 
@@ -180,7 +180,8 @@ function preview(
 ): {
   play: () => Promise<void>;
 } {
-  const chats = prepare_chats(scene, chat_configs);
+  const container = scene.firstChild! as HTMLDivElement;
+  const chats = prepare_chats(container, chat_configs);
 
   // send all danmaku to proper ready position by attaching the danmaku class
   for (const { element } of chats) {
@@ -215,6 +216,7 @@ function preview(
     exit_time: -1,
     animation: null,
   };
+  let skipped_chats = 0;
   for (const { chat, element } of chats) {
     const current_time = chat.shared.enter_millisecond;
     let chats_to_remove = 0;
@@ -242,7 +244,7 @@ function preview(
     const exit_time = current_time + total_duration;
     const { start, handle } = allocator.allocate(breadth, speed, current_time);
     if (start === -1) {
-      console.log("failed to allocate track");
+      skipped_chats++;
       continue;
     }
     const func =
@@ -287,6 +289,11 @@ function preview(
       reference_animation.animation = animation;
     }
   }
+  useDialog().show_dialog(
+    "warning",
+    "部分消息发射失败",
+    `${skipped_chats}条消息由于入场时刻太接近、最小间隔太大、场景太小而未能发射`,
+  );
 
   // now the individual chats can be animated
   const revokes = gather_theme_animations(chats, animations, configuring);
@@ -302,7 +309,11 @@ function preview(
         }
         // ... wait for the last animation to finish
         return new Promise<void>((resolve) => {
-          reference_animation.animation!.addEventListener("finish", () =>
+          if (reference_animation.animation === null) {
+            resolve();
+            return;
+          }
+          reference_animation.animation.addEventListener("finish", () =>
             resolve(),
           );
         });
@@ -410,16 +421,16 @@ async function render(
   // send initial frames
   {
     //  clear the canvas
+    scene_context.clearRect(0, 0, scene_size.width, scene_size.height);
     scene_context.fillStyle = configuring.shared.background;
     scene_context.fillRect(0, 0, scene_size.width, scene_size.height);
-    const initial_frame = await canvas_to_blob(scene_canvas);
     //  send frames
     for (
       current_total_frame = 0;
       current_total_frame < prefixing_frames;
       current_total_frame++
     ) {
-      await encoder.add_frame(initial_frame);
+      await encoder.add_frame(scene_context);
       update_progress((current_total_frame / frames) * 100);
     }
   }
@@ -446,6 +457,8 @@ async function render(
     time_delta: -1,
   };
 
+  scene_context.font = `${configuring.shared.chat_font_size}px "${configuring.shared.font_family}"`;
+  scene_context.textRendering = "optimizeLegibility";
   for (
     ;
     timing.current_frame < suffixing_frames + working_frames;
@@ -564,6 +577,7 @@ async function render(
     internal_chats.splice(0, evaluated_chats, ...preserved_chats.splice(0));
 
     // render current frame
+    scene_context.clearRect(0, 0, scene_size.width, scene_size.height);
     scene_context.fillStyle = configuring.shared.background;
     scene_context.fillRect(0, 0, scene_size.width, scene_size.height);
     for (const { ccb } of internal_chats) {
@@ -579,8 +593,7 @@ async function render(
       ccb.render_pass2(scene_context, helper_context, timing);
     }
     // save current frame
-    const frame = await canvas_to_blob(scene_canvas);
-    await encoder.add_frame(frame);
+    await encoder.add_frame(scene_context);
     current_total_frame++;
     update_progress((current_total_frame / frames) * 100);
   }
