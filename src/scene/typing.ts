@@ -12,6 +12,7 @@ type Previewer = (
 };
 
 type Rendering = (
+  server: number,
   chats: FullChatConfigure[],
   configuring: FullGlobalConfigure,
   update_progress: (ratio: number) => void,

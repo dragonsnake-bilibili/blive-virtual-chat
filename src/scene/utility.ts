@@ -71,12 +71,15 @@ export function preview_wrapper(
 
 // helper class to communicate with the video encoder
 export class SceneVideoEncoder {
-  static #url = "http://localhost:8020/";
+  #url: string;
 
-  private constructor() {}
+  private constructor(url: string) {
+    this.#url = url;
+  }
 
-  static async build(fps: number, size: Size) {
-    await fetch(SceneVideoEncoder.#url, {
+  static async build(server: number, fps: number, size: Size) {
+    const url = `http://localhost:${server}/`;
+    await fetch(url, {
       method: "POST",
       body: JSON.stringify({
         method: "begin",
@@ -86,7 +89,7 @@ export class SceneVideoEncoder {
       }),
       headers: { "Content-Type": "application/json" },
     });
-    return new SceneVideoEncoder();
+    return new SceneVideoEncoder(url);
   }
 
   async add_frame(
@@ -98,7 +101,7 @@ export class SceneVideoEncoder {
       context.canvas.width,
       context.canvas.height,
     );
-    return await fetch(SceneVideoEncoder.#url, {
+    return await fetch(this.#url, {
       method: "POST",
       body: image.data,
       headers: { "Content-Type": "application/octet-stream" },
@@ -106,7 +109,7 @@ export class SceneVideoEncoder {
   }
 
   async close() {
-    return await fetch(SceneVideoEncoder.#url, {
+    return await fetch(this.#url, {
       method: "POST",
       body: JSON.stringify({ method: "end" }),
       headers: { "Content-Type": "application/json" },

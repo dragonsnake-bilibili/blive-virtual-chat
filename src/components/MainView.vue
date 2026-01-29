@@ -332,6 +332,7 @@
     <v-alert
       border="start"
       closable
+      max-width="60vw"
       :title="dialog.state.title"
       :type="dialog.state.type"
       @click:close="dialog.state.show = false"
@@ -356,6 +357,7 @@ import { useGoTo } from "vuetify";
 import SceneVariants from "@/scene";
 import { useAvatars } from "@/stores/avatars";
 import { useDialog } from "@/stores/dialog";
+import versioning from "@/versioning.json";
 import CHAT_THEMES from "./chat-themes";
 import {
   type FullChatConfigure,
@@ -528,23 +530,77 @@ const record_status: Reactive<{
   progress: 0,
 });
 
+const _PORTS = [
+  26_282, 42_523, 54_266, 29_095, 42_503, 55_729, 50_431, 56_421, 41_246,
+  16_171,
+] as const;
+const helping_server: { port_index: number } = { port_index: 0 };
+function get_helper_program_address() {
+  const separator = import.meta.env.BASE_URL.endsWith("/") ? "" : "/";
+  const path = `${import.meta.env.BASE_URL}${separator}video-receiver.py`;
+  return new URL(path, import.meta.url).href;
+}
+async function ping_server(
+  port: number,
+): Promise<{ connected: false } | { connected: true; usable: boolean }> {
+  try {
+    const response = await fetch(`http://localhost:${port}/`, {
+      method: "POST",
+      body: JSON.stringify({ method: "ping" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const data = await response.json();
+    if (data.interface === undefined) {
+      return { connected: false };
+    }
+    if (
+      data.interface !== -1 &&
+      data.interface !== versioning["recorder-interface"]
+    ) {
+      dialog.show_dialog(
+        "error",
+        "辅助程序版本不匹配",
+        `已连接到辅助程序（端口号${port}），但两者接口版本不同（辅助程序：${data.interface}，本程序：${versioning["recorder-interface"]}）。请从${get_helper_program_address()}重新获取辅助程序`,
+      );
+      return { connected: true, usable: false };
+    }
+    return { connected: true, usable: true };
+  } catch {
+    return { connected: false };
+  }
+}
+async function find_server(): Promise<number | undefined> {
+  let index = helping_server.port_index;
+  do {
+    const ping = await ping_server(_PORTS[index]!);
+    if (ping.connected) {
+      if (ping.usable) {
+        helping_server.port_index = index;
+        return _PORTS[index]!;
+      } else {
+        return undefined;
+      }
+    }
+    index = (index + 1) % _PORTS.length;
+  } while (index !== helping_server.port_index);
+  const url = get_helper_program_address();
+  dialog.show_dialog(
+    "error",
+    "无法找到录制辅助程序",
+    `进行录制需要运行本地辅助程序，请检查是否已经运行。获取程序：${url}。需要Python运行环境来运行`,
+  );
+  return undefined;
+}
 function record() {
   record_status.progress = 0;
   record_status.recording = true;
   (async () => {
-    try {
-      await fetch("http://localhost:8020/", {
-        method: "POST",
-        body: JSON.stringify({ method: "ping" }),
-        headers: { "Content-Type": "application/json" },
-      });
-    } catch {
-      const separator = import.meta.env.BASE_URL.endsWith("/") ? "" : "/";
-      const path = `${import.meta.env.BASE_URL}${separator}video-receiver.py`;
-      const url = new URL(path, import.meta.url).href;
-      throw `无法连接录制程序，请确认是否已经运行？获取程序：${url}。需要Python运行环境来运行。`;
+    const server_port = await find_server();
+    if (server_port === undefined) {
+      return;
     }
     return configuring.selected_mode!.render(
+      server_port,
       chats,
       full_global_configure.value,
       (progress) => {
@@ -553,7 +609,9 @@ function record() {
     );
   })()
     .then((path) => {
-      dialog.show_dialog("success", "渲染成功", `视频已保存到 ${path}`);
+      if (path !== undefined) {
+        dialog.show_dialog("success", "渲染成功", `视频已保存到 ${path}`);
+      }
     })
     .catch((error) => {
       dialog.show_dialog("error", "渲染失败", `遇到了如下错误：${error}`);

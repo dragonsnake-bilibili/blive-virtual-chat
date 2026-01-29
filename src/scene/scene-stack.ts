@@ -160,6 +160,7 @@ function preview(
 }
 
 async function render(
+  server: number,
   chats: FullChatConfigure[],
   configuring: FullGlobalConfigure,
   update_progress: (ratio: number) => void,
@@ -219,7 +220,7 @@ async function render(
   };
 
   // prepare the video encoder
-  const encoder = await SceneVideoEncoder.build(fps, scene_size);
+  const encoder = await SceneVideoEncoder.build(server, fps, scene_size);
 
   // prepare progress metrics
   let current_total_frame = 0;

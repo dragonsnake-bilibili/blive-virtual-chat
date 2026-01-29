@@ -41,6 +41,12 @@ jobs:
         env:
           VITE_BASE: /bvc/beta/
 
+      - name: Inject version information
+        run: |
+          sudo apt update && sudo apt install -y sed
+          sed -i -E 's|_INTERFACE_VERSION = None|_INTERFACE_VERSION = '"$(jq -rc '."recorder-interface"' src/versioning.json | tr -d '\n')"'|g' dist/video-receiver.py
+          jq '{version:.version}' package.json > dist/meta.json
+
       - name: Prepare bvc repository
         env:
           BVC_REPO: github.com/${{ github.repository_owner }}/bvc.git
@@ -71,7 +77,7 @@ jobs:
         run: |
           cd bvc
           git add --all
-          git commit -m "Deploy from ${{ github.ref_name }}@${{ github.sha }}" || echo "No changes to commit"
+          git commit --amend -m "Deploy from ${{ github.ref_name }}@${{ github.sha }}" || echo "No changes to commit"
           git push --force "https://x-access-token:${BVC_PAT}@${BVC_REPO}" main
 
       - name: Done

@@ -13,6 +13,9 @@ from tempfile import NamedTemporaryFile
 from threading import Event, Thread
 from types import FrameType
 
+_INTERFACE_VERSION = None
+_PORTS = [26282, 42523, 54266, 29095, 42503, 55729, 50431, 56421, 41246, 16171]
+
 
 class _VideoEncoder:
   def __init__(self, path: str, width: int, height: int, fps: int) -> None:
@@ -93,9 +96,11 @@ class _Handler(BaseHTTPRequestHandler):
       return
 
     if method == "ping":
-      self.send_response(HTTPStatus.NO_CONTENT)
+      self.send_response(HTTPStatus.OK)
       self.send_header("Access-Control-Allow-Origin", "*")
+      self.send_header("Content-Type", "application/json")
       self.end_headers()
+      self.wfile.write(dumps({"interface": _INTERFACE_VERSION or -1}).encode())
       return
 
     if self.server.encoder is not None:
@@ -173,11 +178,21 @@ def _main() -> None:
       "程序需要 FFmpeg 进行视频编码，请确认是否已安装并加入 PATH 环境变量。也可以通过命令行参数指定其位置",  # noqa: RUF001
     )
     exit_program()
-  server = _Server(
-    server_address=("localhost", arguments.port),
-    RequestHandlerClass=_Handler,
-    ffmpeg_path=ffmpeg_binary,
-  )
+
+  server = None
+  for port in _PORTS:
+    try:
+      server = _Server(
+        server_address=("localhost", port),
+        RequestHandlerClass=_Handler,
+        ffmpeg_path=ffmpeg_binary,
+      )
+      break
+    except OSError:
+      server = None
+  if server is None:
+    print("程序无法找到可用端口")  # noqa: T201
+    exit_program()
   server_thread = Thread(target=server.serve_forever)
   waiter = Event()
 
